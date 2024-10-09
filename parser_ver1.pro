@@ -10,4 +10,5 @@ INCLUDEPATH += /usr/lib/x86_64-linux-gnu/
 LIBS += -lcurl
 
 SOURCES += \
-        main.cpp
+        main.cpp \
+        work_curl.cpp

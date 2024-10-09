@@ -1,108 +1,96 @@
 #include <iostream>
-#include<curl/curl.h>
-#include <string>
-
-std::string get_http()
-{
-    CURL *curl;
-    CURLcode res;
-    std::string full_info;
-
-    curl = curl_easy_init();
-    if(curl) {
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false); // отключили сертификацию
-        curl_easy_setopt(curl, CURLOPT_URL, "https://www.gismeteo.ru/weather-sankt-peterburg-4079/tomorrow/");  //ищем слово Войти, там есть ссылка https://www.cyberforum.ru/auth.php
-            // переходим на нее
-        // example.com is redirected, so we tell libcurl to follow redirection
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-
-
-
-        // Perform the request, res will get the return code
-        std::cout << "\n\n\n\n\n\n================================================================\n\n\n\n" << std::endl;
-        std::cout << curl_easy_perform(curl) <<std::endl;
-        std::cout << "\n\n\n\n\n\n================================================================\n\n\n\n" << std::endl;
-        /*res = curl_easy_perform(curl); //выводит результат
-        // Check for errors
-        if(res != CURLE_OK)
-        {
-
-            full_info=res;
-                //fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
-
-        }
-        // always cleanup*/
-        curl_easy_cleanup(curl);
-    }
-    return full_info;
-}
-void start_parse(std::string code_of_pages)
-{
-
-}
-
-int main(void)
-{
-    start_parse(get_http());
-return 0;
-}
-
-/*i#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <curl/curl.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-using std::string;
-static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream)
+#include <string>
+#include <fstream>
+
+// функция, вызываемая cURL для записи полученых данных
+using namespace std;
+std::string curlBuffer;
+size_t curlWriteFunc(char *data, size_t size, size_t nmemb, std::string *buffer)
 {
-  size_t written = fwrite(ptr, size, nmemb, (FILE *)stream);
-  return written;
+    size_t result = 0;
+    if (buffer != NULL)
+    {
+        buffer->append(data, size * nmemb);
+        result = size * nmemb;
+    }
+    return result;
 }
 
-int downloadurl(std::string URL,std::string localDirectory)
+int main()
 {
-  CURL *curl_handle;
-  static const char *pagefilename = localDirectory.c_str();
-  FILE *pagefile;
+    // запрашиваемая страничка(путь до login screen)
+    const char *url = "https://www.gismeteo.ru/weather-sankt-peterburg-4079/tomorrow/";
+    // буфер для сохранения текстовых ошибок
+    char curlErrorBuffer[CURL_ERROR_SIZE];
+    CURL *curl = curl_easy_init();
+    std::ofstream out_file;
+    out_file.open("file_write.txt");
+    if (curl) {
+        curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curlErrorBuffer);
+        // задаем URL...
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        // переходить по "Location:" указаному в HTTP заголовке
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, true); //Алекс: под вопросом надо ли...
+        // не проверять сертификат удаленного сервера
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, false);
+        // функция, вызываемая cURL для записи полученых данных
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &curlBuffer);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteFunc);
+        // выполнить запрос
+        CURLcode curlResult = curl_easy_perform(curl);
+        // завершение сеанса
+        curl_easy_cleanup(curl);
+        if (curlResult != CURLE_OK)
+        {
+            std::cout << "Ошибка(" << curlResult << "): " << curlErrorBuffer << std::endl;
+            return(-1);
+        }
 
-  curl_global_init(CURL_GLOBAL_ALL);
+        //std::cout << curlBuffer << std::endl;
+        std::string text=curlBuffer;
+        if(out_file.is_open())
+        {
+            out_file << curlBuffer;
+        }
 
-// init the curl session
-curl_handle = curl_easy_init();
+        int test = text.find("<div class=\"day\">Завтра</div>"); //<div class="day">Завтра</div>
+        std::string vrem_str;
+        std::string date;
+        std::string min_value;
+        std::string max_value;
+        vrem_str=text.substr(test-18,16);
+        for (int i=0; i<15; i++)
+        {
+            if (vrem_str[i]=='0'||vrem_str[i]=='1'||vrem_str[i]=='2'||vrem_str[i]=='3'||vrem_str[i]=='4'||vrem_str[i]=='5'||vrem_str[i]=='6'||vrem_str[i]=='7'||vrem_str[i]=='8'||vrem_str[i]=='9')
+                date+=vrem_str[i];
+            if (vrem_str[i]=='<')
+            {
+                date+=' ';
+                date+=vrem_str[i-6];
+                date+=vrem_str[i-5];
+                date+=vrem_str[i-4];
+                date+=vrem_str[i-3];
+                date+=vrem_str[i-2];
+                date+=vrem_str[i-1];
+            }
+        }
+        vrem_str=text.substr(test+220,8);
+        for (int i=0; i<15; i++)
+        {
+            if (vrem_str[i]=='0'||vrem_str[i]=='1'||vrem_str[i]=='2'||vrem_str[i]=='3'||vrem_str[i]=='4'||vrem_str[i]=='5'||vrem_str[i]=='6'||vrem_str[i]=='7'||vrem_str[i]=='8'||vrem_str[i]=='9')
+                min_value+=vrem_str[i];
+        }
+        vrem_str=text.substr(test+348,8);
+        for (int i=0; i<15; i++)
+        {
+            if (vrem_str[i]=='0'||vrem_str[i]=='1'||vrem_str[i]=='2'||vrem_str[i]=='3'||vrem_str[i]=='4'||vrem_str[i]=='5'||vrem_str[i]=='6'||vrem_str[i]=='7'||vrem_str[i]=='8'||vrem_str[i]=='9')
+                max_value+=vrem_str[i];
+        }
+        std::cout << "Температура днем " << date << ".: от " << min_value << " до " << max_value << " гр." << std::endl;
+        // "<div class="day">Завтра</div>"
+        //std::cout << pos << std::endl;
 
-// set URL to get here
-curl_easy_setopt(curl_handle, CURLOPT_URL, URL.c_str());
-
-// Switch on full protocol/debug output while testing
-curl_easy_setopt(curl_handle, CURLOPT_VERBOSE, 1L);
-
-// disable progress meter, set to 0L to enable it
-curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
-
-//  send all data to this function
-curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
-
-// open the file
-pagefile = fopen(pagefilename, "wb");
-if(pagefile)
-{
-    // write the page body to this file handle
-    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, pagefile);
-    //get it!
-    curl_easy_perform(curl_handle);
-    // close the header file
-    fclose(pagefile);
+    }
+    return 0;
 }
-// cleanup curl stuff
-curl_easy_cleanup(curl_handle);
-
-curl_global_cleanup();
-
-return 0;
-}
-void curlMainWindow::on_pushButton_clicked()
-{
-    downloadurl("https://img.zcool.cn/community/01ddc256eb71586ac7257d209712b7.jpg@1280w_1l_2o_100sh.jpg","./test.jpg");
-}
-*/
